@@ -1,0 +1,493 @@
+---
+title: "STAT PROJECT"
+output: pdf_document
+date: "2025-03-07"
+---
+
+---
+title: "Progetto StatLearning"
+author: "Giuseppe Specioso - Tommaso Covino"
+date: "2025-02-08"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(kableExtra)
+library(dplyr)
+library(GGally)
+library(corrplot)
+library(dplyr)
+```
+
+## R Markdown
+```{r}
+# Define column names based on dataset documentation
+# Define column names consecutively
+column_names <- c("checking_account", "duration_months", "credit_history", "purpose", "credit_amount", 
+                  "savings_account", "employment_since", "installment_rate", "personal_status", 
+                  "other_debtors", "residence_since", "property", "age", "installment_plans", 
+                  "housing", "num_existing_credits", "job", "num_people_liable", "telephone", 
+                  "foreign_worker", "loan_approval")
+
+# Read the dataset (ensure the filename is correct)
+df <- read.table("german.data", header = FALSE, sep = "") #giuseppe
+df <- read.table("~/Desktop/Stat Learning/credit/german.data", header = FALSE, sep = "", stringsAsFactors = TRUE) #tommaso
+
+
+# Assign the column names to the data frame
+colnames(df) <- column_names
+
+# Convert character variables to factors
+df <- df %>%
+  mutate(
+    checking_account = as.factor(checking_account),
+    credit_history = as.factor(credit_history),
+    purpose = as.factor(purpose),
+    savings_account = as.factor(savings_account),
+    employment_since = as.factor(employment_since),
+    personal_status = as.factor(personal_status),
+    other_debtors = as.factor(other_debtors),
+    property = as.factor(property),
+    installment_plans = as.factor(installment_plans),
+    housing = as.factor(housing),
+    job = as.factor(job),
+    telephone = as.factor(telephone),
+    foreign_worker = as.factor(foreign_worker),
+    num_people_liable = as.factor(num_people_liable),
+    loan_approval = as.factor(loan_approval)
+  )
+```
+
+```{r Variables modification}
+# Recode loan_approval: Convert 2 -> 0 and 1 -> 1
+df$loan_approval <- ifelse(df$loan_approval == 2, 0, 1)
+df$loan_approval <- as.factor(df$loan_approval)
+
+# Comprise credit_history levels
+df$credit_history <- factor(df$credit_history, 
+                            levels = c("A30", "A31", "A32", "A33", "A34"),
+                            labels = c("Reliable", "Reliable", "Reliable", "Risky", "Risky"))
+
+# Convert 'personal_status' into 'gender' and 'marital_status'
+df$gender <- recode(df$personal_status,
+                    "A91" = "Male", 
+                    "A92" = "Female", 
+                    "A93" = "Male", 
+                    "A94" = "Male", 
+                    "A95" = "Female")
+
+df$marital_status <- recode(df$personal_status,
+                            "A91" = "Married", 
+                            "A92" = "Married", 
+                            "A93" = "Single", 
+                            "A94" = "Married", 
+                            "A95" = "Single")
+
+# Convert the 'foreign_worker' variable into two categories: "Foreign" and "Not Foreign"
+
+df$foreign_worker <- factor(df$foreign_worker, levels = c("A201", "A202"), labels = c("Foreign", "German"))
+
+# Convert 'other_debtors' into simpler categories
+df$other_debtors <- factor(df$other_debtors, levels = c("A101", "A102", "A103"), labels = c("None", "Co-applicant", "Guarantor"))
+
+# Convert 'other_installment_plans' into simpler categories
+df$other_installment_plans <- factor(df$installment_plans, levels = c("A141", "A142", "A143"), labels = c("Bank", "Stores", "None"))
+
+# Convert 'housing' into simpler categories
+df$housing <- factor(df$housing, levels = c("A151", "A152", "A153"), labels = c("Rent", "Own", "Free"))
+
+df <- subset(df, select = -c(personal_status, num_people_liable, telephone, installment_plans, num_existing_credits))
+
+# Conversion for 'checking_account'
+df$checking_account <- factor(df$checking_account, 
+                               levels = c("A11", "A12", "A13", "A14"), 
+                               labels = c("<0", "0-200", ">200", "No checking account"))
+
+# Conversion for 'purpose'
+df$purpose <- factor(df$purpose, 
+                     levels = c("A40", "A41", "A42", "A43", "A44", "A45", "A46", "A47", "A48", "A49", "A410"), 
+                     labels = c("Car (new)", "Car (used)", "Furniture/equipment", "Radio/television", "Domestic appliances", 
+                                "Repairs", "Education", "Vacation", "Retraining", "Business", "Others"))
+
+# Conversion for 'savings_account'
+df$savings_account <- factor(df$savings_account, 
+                              levels = c("A61", "A62", "A63", "A64", "A65"), 
+                              labels = c("<100", "100-500", "500-1000", ">1000", "Unknown/No savings"))
+
+# Conversion for 'employment_since'
+df$employment_since <- factor(df$employment_since, 
+                               levels = c("A71", "A72", "A73", "A74", "A75"), 
+                               labels = c("Unemployed", "<1 year", "1-4 years", "4-7 years", ">7 years"))
+
+# Conversion for 'property'
+df$property <- factor(df$property, 
+                       levels = c("A121", "A122", "A123", "A124"), 
+                       labels = c("Real estate", "Life insurance", 
+                                  "Car/Other", "Unknown/No property"))
+
+# Conversion for 'job'
+df$job <- factor(df$job, 
+                 levels = c("A171", "A172", "A173", "A174"), 
+                 labels = c("Unemployed", "Unskilled employee", 
+                            "Skilled employee", "Management/self-employed/highly qualified"))
+
+
+str(df)
+
+```
+
+
+
+```{r}
+data_numeric <- df[sapply(df, is.numeric)]
+correlation_matrixtot <- cor(data_numeric)
+corrplot((correlation_matrixtot), type = "full", tl.cex = 0.4, addCoef.col = "black",
+number.cex = 0.5, tl.col = "black" )
+
+# Plot 1: duration_months vs credit_amount
+ggplot(df, aes(x = duration_months, y = credit_amount)) +
+  geom_point(color = "blue") +  # Scatter plot
+  geom_smooth(method = "lm", se = FALSE, color = "red") +  # Adding a linear regression line
+  labs(title = "Duration vs Credit Amount", x = "Duration (Months)", y = "Credit Amount") +
+  theme_minimal()
+
+# Plot 2: installment_rate vs credit_amount
+ggplot(df, aes(x = installment_rate, y = credit_amount)) +
+  geom_point(color = "green") +  # Scatter plot
+  geom_smooth(method = "lm", se = FALSE, color = "red") +  # Adding a linear regression line
+  labs(title = "Installment Rate vs Credit Amount", x = "Installment Rate (%)", y = "Credit Amount") +
+  theme_minimal()
+```
+
+
+
+```{r}
+# Bar plot for the frequency of loan approvals (0 and 1)
+ggplot(df, aes(x = factor(loan_approval))) + 
+  geom_bar(fill = c("#FF6347", "#4682B4"), color = "black") +  # Two different colors for the two categories
+  geom_text(stat = "count", aes(label = ..count..), vjust = -0.5) +  # Adding counts on top of bars
+  labs(title = "Loan Approval Distribution", 
+       x = "Loan Approval Status", 
+       y = "Number of Loans", 
+       caption = "Data Source: [German Credit Data]") +  # Customize the title and caption
+  theme_minimal() + 
+  theme(axis.text.x = element_text(size = 12, angle = 0, hjust = 0.5))  # Improved axis labels
+```
+
+```{r}
+# Plot 1: loan_approval vs duration_months
+plot1 <- ggplot(df, aes(x = loan_approval, y = duration_months, fill = loan_approval)) +
+  geom_boxplot() +
+  labs(title = "Loan Approval vs Duration (Months)", x = "Loan Approval", y = "Duration (Months)") +
+  theme_minimal()
+
+# Plot 2: loan_approval vs credit_amount
+plot2 <- ggplot(df, aes(x = loan_approval, y = credit_amount, fill = loan_approval)) +
+  geom_boxplot() +
+  labs(title = "Loan Approval vs Credit Amount", x = "Loan Approval", y = "Credit Amount") +
+  theme_minimal()
+
+# Plot 3: loan_approval vs installment_rate
+plot3 <- ggplot(df, aes(x = loan_approval, y = installment_rate, fill = loan_approval)) +
+  geom_boxplot() +
+  labs(title = "Loan Approval vs Installment Rate", x = "Loan Approval", y = "Installment Rate") +
+  theme_minimal()
+
+# Plot 4: loan_approval vs age
+plot4 <- ggplot(df, aes(x = loan_approval, y = age, fill = loan_approval)) +
+  geom_boxplot() +
+  labs(title = "Loan Approval vs Age", x = "Loan Approval", y = "Age") +
+  theme_minimal()
+
+library(gridExtra)  # Carica il pacchetto
+grid.arrange(plot1, plot2, plot3, plot4, nrow = 2, ncol = 2)
+```
+
+```{r PCA}
+# Step 1: Select only the numeric columns (excluding the target variable 'loan_approval')
+numeric_columns <- df[, sapply(df, is.numeric)]
+
+# Step 2: Standardize the numeric columns
+numeric_columns_standardized <- scale(numeric_columns)
+
+# Step 3: Apply PCA to the standardized numeric data
+pc_credit_risk <- princomp(numeric_columns_standardized)
+
+# Step 4: Print the PCA object to get details
+pc_credit_risk
+
+# Step 5: Summary of PCA to see variance explained by each component
+summary(pc_credit_risk)
+```
+
+```{r}
+# Step 1: Set up the plot area to display 2 plots side by side
+par(mfrow = c(1, 2))
+
+# Step 2: Plot variances of the Principal Components
+barplot(pc_credit_risk$sdev^2, 
+        las=2, 
+        main='Principal Components Variance', 
+        ylim=c(0,2), 
+        ylab='Variances')
+
+
+# Step 3: Plot cumulative contribution to total variance
+plot(cumsum(pc_credit_risk$sdev^2) / sum(pc_credit_risk$sdev^2), 
+     type='b', 
+     axes=F, 
+     xlab='Number of Components', 
+     ylab='Contribution to Total Variance', 
+     ylim=c(0,1))
+# Add a horizontal red line at 0.8
+abline(h=0.8, col='red')
+
+# Add axes
+box()
+axis(2, at=0:10/10, labels=0:10/10)
+axis(1, at=1:length(pc_credit_risk$sdev), labels=1:length(pc_credit_risk$sdev), las=2)
+
+# Reset plot layout to default (single plot)
+par(mfrow = c(1, 1))
+```
+
+```{r}
+# Select the numeric variables
+quant_vars <- c("duration_months", "credit_amount", "installment_rate", "residence_since", "age")
+data_quant <- df[, quant_vars]
+
+# Standardize the data
+data_quant_scaled <- scale(data_quant)
+
+# Perform PCA
+pca_result <- prcomp(data_quant_scaled, center = TRUE, scale. = TRUE)
+
+# Extract scores
+scores <- pca_result$x
+print(scores)
+
+# Loadings (Principal Component Contributions)
+loadings <- pca_result$rotation
+print(loadings)
+
+# Filter out insignificant loadings for better interpretability
+par(mar = c(1,4,0,2), mfrow = c(3,1))
+for(i in 1:3){
+  barplot(ifelse(abs(loadings[,i]) < 0.3, 0, loadings[,i]), ylim = c(-1, 1), col=rainbow(length(quant_vars)))
+  abline(h=0)
+} 
+
+# Biplot of the PCA
+layout(1)
+# Basic biplot
+biplot(pca_result)
+```
+
+```{r}
+# Seleziona solo le colonne di tipo factor o character
+categorical_data <- df[, sapply(df, is.factor) | sapply(df, is.character)]
+# Supponiamo che pca_components contenga le componenti principali
+combined_data <- cbind(scores, categorical_data)
+str(combined_data)
+```
+
+```{r}
+library(tidyverse)
+library(caret)
+library(randomForest)
+library(e1071)
+library(FactoMineR)
+library(factoextra)
+# Divisione in train e test (80-20)
+set.seed(123)
+train_index <- createDataPartition(combined_data$loan_approval, p = 0.8, list = FALSE)
+train_data <- combined_data[train_index, ]
+test_data <- combined_data[-train_index, ]
+```
+
+```{r Logistic}
+# Modello di regressione logistica
+log_model <- glm(loan_approval ~ ., data = train_data, family = binomial)
+
+# Previsioni del modello
+log_pred <- predict(log_model, test_data, type = "response")
+
+# Classifica le previsioni come "Good" o "Bad"
+log_pred_class <- ifelse(log_pred > 0.5, "Good", "Bad")
+
+# Converti in factor e allinea i livelli
+log_pred_class <- as.factor(log_pred_class)
+test_data$loan_approval <- as.factor(test_data$loan_approval)
+
+# Assicurati che i livelli siano gli stessi
+levels(log_pred_class) <- c("Bad", "Good")
+levels(test_data$loan_approval) <- c("Bad", "Good")
+
+# Calcola la matrice di confusione
+conf_matrix <- confusionMatrix(log_pred_class, test_data$loan_approval)
+
+# Visualizza la matrice di confusione
+print(conf_matrix)
+```
+
+```{r Random forests}
+# Addestra il modello Random Forest
+rf_model <- randomForest(loan_approval ~ ., data = train_data, 
+                         mtry = sqrt(ncol(train_data) - 1),  # Variabili per split
+                         ntree = 500,  # Numero di alberi
+                         importance = TRUE)
+
+# Previsioni sul test set
+rf_pred <- predict(rf_model, test_data)
+rf_pred <- factor(rf_pred, levels = c("0", "1"), labels = c("Bad", "Good"))
+
+# Matrice di confusione e accuratezza
+rf_conf_matrix <- confusionMatrix(rf_pred, test_data$loan_approval)
+print(rf_conf_matrix)
+
+# Importanza delle variabili
+tiff("feature_importance.tiff") # Salva l'immagine della grafico
+varImpPlot(rf_model)
+dev.off()
+```
+
+
+```{r SVM}
+svm_model <- svm(loan_approval~., data = train_data, kernel = "radial", cost = 1, scale = T)
+summary(svm_model)
+
+pred_svm = predict(svm_model, test_data)
+(conf_matrx_svm <- table(Predicted = pred_svm, Actual = test_data$loan_approval))
+
+# accuracy
+sum(diag(conf_matrx_svm))/sum(conf_matrx_svm)
+
+# Load necessary library
+library(e1071)
+
+# Define the tuning grid: cost and gamma values
+tune_svm <- tune(svm, 
+                 loan_approval ~ ., data = train_data,  # Classification task
+                 kernel = "radial",  # SVM with RBF kernel
+                 ranges = list(cost = c(0.1, 1, 10),  # Test different cost values
+                               gamma = c(0.01, 0.1, 1)))  # Test different gamma values
+
+# Print results of the grid search
+summary(tune_svm)
+
+# Select the best model based on the tuning results
+best_svm <- tune_svm$best.model
+summary(best_svm)  # View details of the best SVM model
+
+# prediction on test set
+pred_svm <- predict(best_svm, newdata = test_data)
+pred_svm <- factor(pred_svm, levels = c("0", "1"), labels = c("Bad", "Good"))
+# confusion matrix out-of-sample
+(conf_matrx_svm <- table(Predicted = pred_svm, Actual = test_data$loan_approval))
+
+# accuracy
+sum(diag(conf_matrx_svm))/sum(conf_matrx_svm)
+```
+
+
+```{r Valutazione del modello}
+# Creare una funzione per calcolare AUC
+calculate_auc <- function(model_pred, true_labels) {
+  pred_obj <- prediction(as.numeric(model_pred), as.numeric(true_labels))
+  auc_value <- performance(pred_obj, "auc")@y.values[[1]]
+  return(auc_value)
+}
+
+# Calcolare AUC per ogni modello
+auc_log <- calculate_auc(log_pred, test_data$loan_approval)
+auc_rf <- calculate_auc(rf_pred, test_data$loan_approval)
+auc_svm <- calculate_auc(pred_svm, test_data$loan_approval)
+
+
+# Confronto delle performance
+auc_results <- data.frame(Model = c("Logistic Regression", "Random Forest", "SVM"),
+                          AUC = c(auc_log, auc_rf, auc_svm))
+print(auc_results)
+```
+
+```{r}
+calculate_accuracy <- function(model_pred, true_labels) {
+  model_pred <- factor(model_pred, levels = levels(factor(true_labels)))  # Allinea i livelli
+  true_labels <- factor(true_labels)
+  accuracy <- sum(model_pred == true_labels) / length(true_labels)
+  return(accuracy)
+}
+
+# Calcolare Accuracy per ogni modello
+acc_log <- calculate_accuracy(log_pred_class, test_data$loan_approval)
+acc_rf <- calculate_accuracy(rf_pred, test_data$loan_approval)
+acc_svm <- calculate_accuracy(pred_svm, test_data$loan_approval)
+
+acc_results <- data.frame(Model = c("Logistic Regression", "Random Forest", "SVM"),
+                          ACC = c(acc_log, acc_rf, acc_svm))
+print(acc_results)
+```
+
+```{r}
+calculate_metrics <- function(model_pred, true_labels) {
+  model_pred <- factor(model_pred, levels = levels(factor(true_labels)))  # Allinea i livelli
+  true_labels <- factor(true_labels)
+  
+  cm <- confusionMatrix(model_pred, true_labels)
+  
+  precision <- cm$byClass["Pos Pred Value"]  # Precision
+  recall <- cm$byClass["Sensitivity"]  # Recall
+  f1_score <- 2 * (precision * recall) / (precision + recall)  # F1-score
+  
+  return(c(precision, recall, f1_score))
+}
+
+# Calcolare le metriche per ogni modello
+metrics_log <- calculate_metrics(log_pred_class, test_data$loan_approval)
+metrics_rf <- calculate_metrics(rf_pred, test_data$loan_approval)
+metrics_svm <- calculate_metrics(pred_svm, test_data$loan_approval)
+
+# Estrarre i valori
+precision_log <- metrics_log[1]
+recall_log <- metrics_log[2]
+f1_log <- metrics_log[3]
+
+precision_rf <- metrics_rf[1]
+recall_rf <- metrics_rf[2]
+f1_rf <- metrics_rf[3]
+
+precision_svm <- metrics_svm[1]
+recall_svm <- metrics_svm[2]
+f1_svm <- metrics_svm[3]
+
+# Creare un dataframe con tutte le metriche
+results <- data.frame(
+  Model = c("Logistic Regression", "Random Forest", "SVM"),
+  AUC = c(auc_log, auc_rf, auc_svm),
+  Accuracy = c(acc_log, acc_rf, acc_svm),
+  Precision = c(precision_log, precision_rf, precision_svm),
+  Recall = c(recall_log, recall_rf, recall_svm),
+  F1_Score = c(f1_log, f1_rf, f1_svm)
+)
+
+# Stampare i risultati
+print(results)
+```
+
+```{r}
+library(pROC)
+
+# Creazione delle curve ROC
+roc_log <- roc(test_data$loan_approval, as.numeric(log_pred_class))
+roc_rf <- roc(test_data$loan_approval, as.numeric(rf_pred))
+roc_svm <- roc(test_data$loan_approval, as.numeric(pred_svm))
+
+# Plot delle curve
+plot(roc_log, col = "blue", main = "ROC Curves")
+lines(roc_rf, col = "red")
+lines(roc_svm, col = "green")
+legend("bottomright", legend = c("Logistic", "Random Forest", "SVM"),
+       col = c("blue", "red", "green"), lwd = 2)
+```
